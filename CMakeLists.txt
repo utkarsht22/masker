@@ -4,6 +4,7 @@ project(masker)
 find_package(catkin REQUIRED 
 OpenCV REQUIRED
 COMPONENTS
+cv_bridge image_transport
   roscpp
   rospy
   sensor_msgs

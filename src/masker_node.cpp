@@ -17,6 +17,9 @@
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <image_transport/image_transport.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
 using namespace std;
 using namespace cv;
 
@@ -155,6 +158,35 @@ void predictionsCallback(const std_msgs::UInt16MultiArray::ConstPtr& msg)
   for(int i=0;i<576;i++)
     mask[i]=msg->data[i];
 } 
+sensor_msgs::ImagePtr imageToROSmsg(cv::Mat img, const std::string encodingType, std::string frameId, ros::Time t)
+{
+    // this part of the source code has been imported from https://github.com/stereolabs/zed-ros-wrapper
+    sensor_msgs::ImagePtr ptr = boost::make_shared<sensor_msgs::Image>();
+    sensor_msgs::Image& imgMessage = *ptr;
+    imgMessage.header.stamp = t;
+    imgMessage.header.frame_id = frameId;
+    imgMessage.height = img.rows;
+    imgMessage.width = img.cols;
+    imgMessage.encoding = encodingType;
+    int num = 1; //for endianness detection
+    imgMessage.is_bigendian = !(*(char *) &num == 1);
+    imgMessage.step = img.cols * img.elemSize();
+    size_t size = imgMessage.step * img.rows;
+    imgMessage.data.resize(size);
+
+    if (img.isContinuous())
+        memcpy((char*) (&imgMessage.data[0]), img.data, size);
+    else {
+        uchar* opencvData = img.data;
+        uchar* rosData = (uchar*) (&imgMessage.data[0]);
+        for (unsigned int i = 0; i < img.rows; i++) {
+            memcpy(rosData, opencvData, imgMessage.step);
+            rosData += imgMessage.step;
+            opencvData += img.step;
+        }
+    }
+    return ptr;
+}
 
 
 int main(int argc,char **argv)
@@ -163,10 +195,16 @@ int main(int argc,char **argv)
     ros::NodeHandle n2;
     ros::Subscriber sub = n2.subscribe("predictions", 1000, predictionsCallback);       
     ros::Subscriber sub2 = n2.subscribe("/gslicr/segmentation", 1000, labelsCallback);       
-    
-    // get mask from callback function and averaged image (27X27)
-    
+    image_transport::ImageTransport it_gslicr(n2);
+        ros::Time t;
 
+    image_transport::Publisher pub_avg = it_gslicr.advertise("/final_image", 1);
+
+    // get mask from callback function and averaged image (27X27)
+    while(ros::ok())
+    {
+        ros::spinOnce();
+ 
     //splfit(mask); // actual function , use only if needed
 
     int red_sum[676]={0},green_sum[676]={0},blue_sum[676]={0};
@@ -198,9 +236,14 @@ int main(int argc,char **argv)
                 M1.at<cv::Vec3b>(x,y)[2]=red_sum[labels[x*500 + y ]] ;// r
         }
     }
-    cv::namedWindow("video",1);
-    cv::imshow("video",M1);
+    //cv::namedWindow("video",1);
+    //cv::imgshow("video",M1);
+    string frame_id="camera";
+    t = ros::Time::now();
 
- ros::spin();
+
+    pub_avg.publish(imageToROSmsg(M1, sensor_msgs::image_encodings::BGR8, frame_id, t));
+
+}
  return 0;
 }
