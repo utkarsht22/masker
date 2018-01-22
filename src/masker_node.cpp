@@ -8,13 +8,15 @@
 #include <vector>
 #include <iomanip>
 #include <cmath>
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/core/core.hpp"
-#include "opencv2/opencv.hpp"
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/opencv.hpp>
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include "std_msgs/UInt16MultiArray.h"
 #include <cv_bridge/cv_bridge.h>
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 using namespace std;
 using namespace cv;
 
@@ -160,7 +162,7 @@ int main(int argc,char **argv)
     ros::init(argc, argv, "masker_node");
     ros::NodeHandle n2;
     ros::Subscriber sub = n2.subscribe("predictions", 1000, predictionsCallback);       
-    ros::Subscriber sub2 = n2.subscribe("labels", 1000, labelsCallback);       
+    ros::Subscriber sub2 = n2.subscribe("/gslicr/segmentation", 1000, labelsCallback);       
     
     // get mask from callback function and averaged image (27X27)
     
@@ -185,6 +187,20 @@ int main(int argc,char **argv)
         }
 
     }
+    
+    cv::Mat M1(500,500, CV_8UC3, {0,0,0});
+    for (int x=0;x<500;x++)
+    {
+        for(int y=0;y<500;y++)
+        {
+                M1.at<cv::Vec3b>(x,y)[0]=blue_sum[labels[x*500 + y ]] ;// b
+                M1.at<cv::Vec3b>(x,y)[1]=green_sum[labels[x*500 + y ]] ;// g
+                M1.at<cv::Vec3b>(x,y)[2]=red_sum[labels[x*500 + y ]] ;// r
+        }
+    }
+    cv::namedWindow("video",1);
+    cv::imshow("video",M1);
+
  ros::spin();
  return 0;
 }
